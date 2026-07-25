@@ -9,6 +9,7 @@ the original binary file intact.
 
 import argparse
 import hashlib
+import os
 import shutil
 import struct
 import subprocess
@@ -19,7 +20,14 @@ from tqdm import tqdm
 
 
 def find_ffmpeg():
-    """Locate ffmpeg executable. Checks PATH first, then common locations."""
+    """Locate ffmpeg. Checks bundled copy first, then PATH, then common locations."""
+    # PyInstaller bundled binaries are extracted to sys._MEIPASS at runtime
+    if getattr(sys, 'frozen', False):
+        bundle_dir = Path(sys._MEIPASS)
+        ffmpeg = bundle_dir / 'ffmpeg.exe'
+        if ffmpeg.exists():
+            return ffmpeg
+
     path = shutil.which('ffmpeg')
     if path:
         return Path(path)
