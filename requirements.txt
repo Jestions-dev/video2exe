@@ -1,0 +1,4 @@
+tqdm>=4.60.0
+# 系统依赖: FFmpeg (解码使用)
+# 下载: https://ffmpeg.org/download.html
+# 或放在 C:\ffmpeg\bin\ 下，工具自动查找
