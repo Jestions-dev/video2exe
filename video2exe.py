@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-video2exe — 从 1:1 彩色视频中精确还原原始文件
+video2exe — Restore original files from 1:1 color video
 
-是 exe2video 的逆向工具。使用 FFmpeg 解码视频，
-根据文件末尾嵌入的大小信息精确截断，还原原始文件。
+Reverse tool for exe2video. Uses FFmpeg to decode video pixel data,
+reads the embedded size trailer to truncate precisely, and restores
+the original binary file intact.
 """
 
 import argparse
@@ -18,7 +19,7 @@ from tqdm import tqdm
 
 
 def find_ffmpeg():
-    """查找 ffmpeg，同时定位 ffprobe。"""
+    """Locate ffmpeg executable. Checks PATH first, then common locations."""
     path = shutil.which('ffmpeg')
     if path:
         return Path(path)
@@ -33,7 +34,7 @@ def find_ffmpeg():
 
 
 def get_video_info(ffprobe: Path, video_path: Path):
-    """使用 ffprobe 获取视频的宽、高、帧数。"""
+    """Use ffprobe to get video width, height, and frame count."""
     cmd = [
         str(ffprobe), '-v', 'error',
         '-select_streams', 'v:0',
@@ -61,44 +62,49 @@ def get_video_info(ffprobe: Path, video_path: Path):
 def video_to_exe(input_path: Path, output_path: Path, md5_compare: str | None = None):
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
-        print("[错误] 找不到 FFmpeg")
+        print("[ERROR] FFmpeg not found. Please install FFmpeg and try again.")
+        print("  Download: https://ffmpeg.org/download.html")
+        print("  Or place it at C:\\ffmpeg\\bin\\ffmpeg.exe")
         sys.exit(1)
+
     ffprobe = ffmpeg.parent / 'ffprobe.exe'
     if not ffprobe.exists():
         ffprobe = Path(shutil.which('ffprobe') or '')
     if not ffprobe.exists():
-        print("[错误] 找不到 ffprobe (通常与 ffmpeg 在同一目录)")
+        print("[ERROR] ffprobe not found (usually in the same directory as ffmpeg)")
         sys.exit(1)
 
     print(f"  FFmpeg: {ffmpeg}")
 
-    # ── 1. 读取原始文件大小 ──────────────────────────────
+    # ── 1. Read original file size from trailer ──────────
     try:
         with open(input_path, 'rb') as f:
             f.seek(-4, 2)
             size_bytes = f.read(4)
         original_size = struct.unpack('<I', size_bytes)[0]
     except (OSError, struct.error):
-        print("\n[错误] 无法读取文件长度信息")
-        print("  该视频可能不是由 exe2video 生成，或文件已损坏")
+        print("\n[ERROR] Cannot read file size trailer.")
+        print("  The video may not have been created by exe2video, or the file is corrupted.")
         sys.exit(1)
 
     if original_size == 0:
-        print("[错误] 记录的文件大小为 0，视频可能无效")
+        print("[ERROR] Recorded file size is 0. Video may be invalid.")
         sys.exit(1)
 
-    print(f"[1/3] 记录的文件大小: {original_size:,} 字节 ({original_size / 1024 / 1024:.2f} MB)")
+    print(f"[1/3] Original file size: {original_size:,} bytes "
+          f"({original_size / 1024 / 1024:.2f} MB)")
 
-    # ── 2. 获取视频参数并提取像素数据 ────────────────────
+    # ── 2. Get video info and extract pixel data ─────────
     width, height, total_frames = get_video_info(ffprobe, input_path)
     if width is None:
-        print("\n[错误] 无法读取视频信息，文件可能不是有效视频")
+        print("\n[ERROR] Cannot read video info. The file may not be a valid video.")
         sys.exit(1)
 
     if width != height:
-        print(f"[警告] 视频非正方形 ({width}x{height}), 但仍尝试提取...")
+        print(f"[WARNING] Video is not square ({width}x{height}), "
+              f"attempting extraction anyway...")
 
-    print(f"[2/3] 视频信息: {width}x{height}, {total_frames} 帧")
+    print(f"[2/3] Video: {width}x{height}, {total_frames} frames")
 
     decode_cmd = [
         str(ffmpeg), '-i', str(input_path),
@@ -114,7 +120,7 @@ def video_to_exe(input_path: Path, output_path: Path, md5_compare: str | None = 
     frame_bytes_size = width * height * 3
     all_bytes = bytearray()
 
-    for _ in tqdm(range(total_frames), desc="提取进度", unit="帧"):
+    for _ in tqdm(range(total_frames), desc="Extracting", unit="frame"):
         raw = proc.stdout.read(frame_bytes_size)
         if len(raw) < frame_bytes_size:
             break
@@ -123,14 +129,14 @@ def video_to_exe(input_path: Path, output_path: Path, md5_compare: str | None = 
     proc.stdout.close()
     proc.wait()
 
-    # ── 3. 截断 & 写出 ────────────────────────────────────
-    print(f"[3/3] 还原文件...")
+    # ── 3. Truncate and write ────────────────────────────
+    print(f"[3/3] Writing output file...")
     if original_size > len(all_bytes):
-        print(f"\n[错误] 视频数据不足")
-        print(f"  需要: {original_size:,} 字节")
-        print(f"  实际: {len(all_bytes):,} 字节")
-        print(f"  差额: {original_size - len(all_bytes):,} 字节")
-        print("  视频可能不完整或不是由 exe2video 生成")
+        print(f"\n[ERROR] Insufficient video data")
+        print(f"  Required: {original_size:,} bytes")
+        print(f"  Available: {len(all_bytes):,} bytes")
+        print(f"  Missing: {original_size - len(all_bytes):,} bytes")
+        print("  The video may be incomplete or was not created by exe2video.")
         sys.exit(1)
 
     exe_data = bytes(all_bytes[:original_size])
@@ -138,46 +144,46 @@ def video_to_exe(input_path: Path, output_path: Path, md5_compare: str | None = 
     with open(output_path, 'wb') as f:
         f.write(exe_data)
 
-    # ── 结果输出 ──────────────────────────────────────────
+    # ── Result ───────────────────────────────────────────
     actual_md5 = hashlib.md5(exe_data).hexdigest()
 
     print(f"\n{'=' * 55}")
-    print(f"  还原完成!")
-    print(f"  输入视频:    {input_path}")
-    print(f"  输出文件:    {output_path}")
-    print(f"  文件大小:    {len(exe_data):,} 字节")
+    print(f"  Restore complete!")
+    print(f"  Input video:  {input_path}")
+    print(f"  Output file:  {output_path}")
+    print(f"  File size:    {len(exe_data):,} bytes")
 
     if md5_compare:
         if actual_md5 == md5_compare.lower():
-            print(f"  MD5 校验:    [PASS] 一致")
+            print(f"  MD5 check:    [PASS]")
         else:
-            print(f"  MD5 校验:    [FAIL] 不一致!")
-            print(f"    期望: {md5_compare.lower()}")
-    print(f"  MD5:         {actual_md5}")
+            print(f"  MD5 check:    [FAIL]")
+            print(f"    Expected: {md5_compare.lower()}")
+    print(f"  MD5:          {actual_md5}")
     print(f"{'=' * 55}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='从 1:1 视频中还原原始文件',
+        description='Restore original files from 1:1 color lossless video',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
+Examples:
   video2exe -i output.mp4 -o restored.exe
   video2exe -i output.mp4 -o restored.exe --md5 abc123...
         """,
     )
     parser.add_argument('-i', required=True, type=Path,
-                        help='输入视频文件路径')
+                        help='Input video file path')
     parser.add_argument('-o', required=True, type=Path,
-                        help='输出还原文件路径')
+                        help='Output restored file path')
     parser.add_argument('--md5', type=str, default=None,
-                        help='原始文件 MD5, 用于校验还原结果')
+                        help='Expected MD5 hash for verification')
 
     args = parser.parse_args()
 
     if not args.i.exists():
-        print(f"[错误] 输入文件不存在: {args.i}")
+        print(f"[ERROR] Input file not found: {args.i}")
         sys.exit(1)
 
     video_to_exe(args.i.resolve(), args.o.resolve(), args.md5)

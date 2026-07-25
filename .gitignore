@@ -1,11 +1,8 @@
-# 白名单: 默认忽略所有，仅放行指定文件
+# Whitelist: ignore all, then allow specific files
 *
 
-# ── 放行的文件 ──
+# Allowed files
 !video2exe.py
 !requirements.txt
 !.gitignore
 !README.md
-
-# ── 放行的目录 ──
-!.gitignore
