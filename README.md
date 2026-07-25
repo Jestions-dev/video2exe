@@ -2,32 +2,38 @@
 
 Restore original files from 1:1 color lossless video.
 
-Uses FFmpeg to decode video pixel data and reconstruct the original binary file
-with byte-level precision.
+---
 
-## Requirements (source only)
+## Quick start (EXE)
 
-- Windows 10/11 64-bit
-- Python 3.8+
-- [FFmpeg](https://ffmpeg.org/download.html) in PATH or at `C:\ffmpeg\bin\`
+1. Download `video2exe.exe` from [Releases](https://github.com/Jestions-dev/video2exe/releases)
+2. Open a terminal in the folder containing your video file
+3. Run:
 
-> The pre-built EXE on the [Releases](https://github.com/Jestions-dev/video2exe/releases) page
-> bundles FFmpeg — download and run, no installation needed.
+```
+video2exe -i video.mp4 -o restored.exe
+```
 
-## Install
+No Python or FFmpeg installation needed — everything is bundled.
+
+With MD5 verification:
+
+```
+video2exe -i video.mp4 -o restored.exe --md5 abc123...
+```
+
+---
+
+## From source
+
+Requirements: Python 3.8+, [FFmpeg](https://ffmpeg.org/download.html) in PATH or at `C:\ffmpeg\bin\`.
 
 ```bash
 pip install -r requirements.txt
+python video2exe.py -i video.mp4 -o restored.exe
 ```
 
-## Usage
-
-```bash
-python video2exe.py -i <video> -o <output>
-
-# With MD5 verification
-python video2exe.py -i video.mp4 -o restored.exe --md5 abc123...
-```
+---
 
 ## Note
 
